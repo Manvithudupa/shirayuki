@@ -1,0 +1,619 @@
+@import "tailwindcss";
+
+/* ─────────────────────────────────────────────────────────────
+   Sode no Shirayuki — design tokens (see docs/04-design-system.md)
+   Dark-first. Glacial slate surfaces. One frost accent. Snow text.
+   ───────────────────────────────────────────────────────────── */
+@theme {
+  /* Surfaces — premium near-black glass (#050505-ish base) */
+  --color-base: oklch(0.07 0.012 250);
+  --color-surface: oklch(0.12 0.013 250);
+  --color-surface-2: oklch(0.16 0.014 250);
+  --color-overlay: oklch(0.11 0.012 250 / 0.55);
+  --color-line: oklch(0.26 0.015 250);
+
+  /* Foreground — snow */
+  --color-snow: oklch(0.97 0.004 240);
+  --color-muted: oklch(0.74 0.012 245);
+  /* A4 fix: bumped from 0.62 to 0.70 to clear WCAG AA (4.5:1) against
+   `--color-base` (oklch 0.07). Previously ~3.2:1, now ~4.7:1. Used for
+   timestamps, secondary meta, footer credits. */
+  --color-faint: oklch(0.7 0.012 248);
+
+  /* Brand — frost */
+  --color-frost: oklch(0.82 0.12 215);
+  --color-frost-deep: oklch(0.64 0.15 245);
+  --color-frost-soft: oklch(0.82 0.12 215 / 0.14);
+
+  /* Whisper accent */
+  --color-sakura: oklch(0.83 0.07 350);
+
+  /* Semantic */
+  --color-success: oklch(0.8 0.13 165);
+  --color-warning: oklch(0.84 0.12 85);
+  --color-danger: oklch(0.68 0.18 25);
+
+  /* Radii */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.875rem;
+  --radius-lg: 1.25rem;
+  --radius-xl: 1.75rem;
+
+  /* Shadows */
+  --shadow-frost: 0 8px 30px -12px oklch(0.64 0.15 245 / 0.35);
+  --shadow-soft: 0 4px 24px -10px oklch(0 0 0 / 0.5);
+  --shadow-neon: 0 0 28px -6px var(--color-frost), 0 0 1px 0 var(--color-frost);
+
+  /* Fonts (wired via next/font CSS vars in layout.tsx) */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-zen), var(--font-geist-sans), sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-line);
+  }
+  html {
+    scroll-behavior: smooth;
+    color-scheme: dark;
+    /* Stable gutter reserves the scrollbar slot up-front so transient
+       overflow state changes (e.g. an image still decoding) don't cause an
+       8–16px horizontal jump. Visual chrome of the scrollbar itself is
+       hidden below; the gutter just keeps the layout footprint constant. */
+    scrollbar-gutter: stable;
+    /* Firefox: hide the scrollbar, keep scrolling. */
+    scrollbar-width: none;
+  }
+  /* WebKit/Blink: hide the root scrollbar entirely. */
+  html::-webkit-scrollbar { width: 0; height: 0; display: none; }
+  body {
+    background-color: var(--color-base);
+    color: var(--color-snow);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+  p { text-wrap: pretty; }
+
+  ::selection {
+    background: var(--color-frost-soft);
+    color: var(--color-snow);
+  }
+
+  /* Frost focus ring */
+  :focus-visible {
+    outline: 2px solid var(--color-frost);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  /* Cool scrollbar — applied to inner scroll regions only. The root page keeps
+     the platform overlay scrollbar so it never reserves a gutter that breaks
+     full-bleed 100vw heroes. */
+  :where(.scroll-frost)::-webkit-scrollbar { width: 10px; height: 10px; }
+  :where(.scroll-frost)::-webkit-scrollbar-track { background: transparent; }
+  :where(.scroll-frost)::-webkit-scrollbar-thumb {
+    background: var(--color-surface-2);
+    border-radius: 999px;
+    border: 2px solid var(--color-base);
+  }
+  :where(.scroll-frost)::-webkit-scrollbar-thumb:hover { background: var(--color-line); }
+}
+
+@layer utilities {
+  .glass {
+    background: color-mix(in oklch, var(--color-base) 35%, transparent);
+    backdrop-filter: blur(20px) saturate(1.15);
+    -webkit-backdrop-filter: blur(20px) saturate(1.15);
+    border: 1px solid color-mix(in oklch, var(--color-frost) 14%, transparent);
+  }
+  /* Snappy hover for items inside .glass panels — keeps transition cheap
+     enough that backdrop-filter doesn't have to repaint on every frame. */
+  .hover-snap {
+    transition: background-color 80ms linear, color 80ms linear;
+  }
+  .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .text-gradient-frost {
+    background: linear-gradient(135deg, var(--color-frost), var(--color-frost-deep));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .snap-x-rail {
+    scroll-snap-type: x mandatory;
+  }
+  .snap-start { scroll-snap-align: start; }
+}
+
+/* Nav glass system — fully unlayered so it always outranks Tailwind's
+   `bg-*` and `backdrop-*` utilities (which ship inside `@layer utilities`).
+   Layered selectors lose the cascade battle and the glass effect silently
+   drops in production builds.
+
+   `.nav-glass` is always present on the <header> for the unscrollled
+   baseline, but at scroll=0 the header is essentially INVISIBLE as a
+   container — no background, no border, no edge cue. The hero image
+   bleeds straight through so the navbar reads as text floating inside
+   the hero rather than a separate header layer.
+
+   `header[data-scrolled="1"]` then layers on a soft dark tint + blur once
+   the page has scrolled past the hero, so the header reasserts itself
+   as a self-contained container only when it's no longer overlapping
+   hero content. */
+.nav-glass {
+  /* At scroll=0 the navbar is intentionally invisible as a container —
+     no background, no border, no saturate, and no backdrop-filter. The
+     hero image bleeds straight through pixel-for-pixel, so the navbar
+     reads as navigation text floating *inside* the hero rather than as a
+     separate header layer stacked on top of one. The scroll handler
+     below is what adds any glass effect, and only once the hero has
+     scrolled out from under it. */
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background-color: transparent;
+  background-image: none;
+  border-bottom-color: transparent;
+}
+
+/* Soft text-shadow on nav links at scroll=0 — guarantees readability on
+   any hero region without painting a "glass rectangle" background. The
+   shadow is a single 1px halo in deep black with a 12px blur, which reads
+   as a subtle type lift rather than a glow. As soon as the navbar enters
+   its scrolled state (and gets its dark glass backdrop), the shadow fades
+   out so the link doesn't sit on a doubled-up dark surface. */
+.nav-link-glow {
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.85);
+  transition: text-shadow 300ms ease-out;
+}
+header[data-scrolled="1"] .nav-link-glow {
+  text-shadow: none;
+}
+
+/* CTA buttons (search trigger, mobile menu) inherit the navbar's
+   invisible-when-over-hero treatment. At scroll=0 they have no surface
+   fill, no shadow — just a faint 1px hairline border to read as tappable.
+   Once the page scrolls and the navbar gets its glass backdrop, the
+   buttons pick up a soft surface tint and the same blur so they read as
+   part of the navbar's glass surface. */
+.nav-cta-glass {
+  background-color: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  transition: background-color 300ms ease-out,
+              backdrop-filter 300ms ease-out,
+              -webkit-backdrop-filter 300ms ease-out;
+}
+header[data-scrolled="1"] .nav-cta-glass {
+  background-color: rgba(0, 0, 0, 0.28);
+  -webkit-backdrop-filter: blur(14px) saturate(1.1);
+  backdrop-filter: blur(14px) saturate(1.1);
+}
+
+header[data-scrolled="1"] {
+  background-color: rgba(0, 0, 0, 0.35);
+  background-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.45) 0%,
+    rgba(0, 0, 0, 0.2) 60%,
+    transparent 100%
+  );
+  -webkit-backdrop-filter: blur(14px) saturate(1.1);
+  backdrop-filter: blur(14px) saturate(1.1);
+  border-bottom: 1px solid color-mix(in oklch, var(--color-frost) 8%, transparent);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Motion system — unified durations and easings.
+
+   Reference quality: Netflix / Crunchyroll / Disney+. Every interactive
+   element picks from one of three timing tiers, so the platform reads as
+   a single design system rather than a jumble of bespoke easings.
+
+     --ease-out   snap-and-settle (cubic-bezier(0.16, 1, 0.3, 1))
+     --ease-in-out symmetric, for continuous / cyclic motion
+     --ease-linear pure linear, for marquee / progress fill
+
+   Use `motion-safe:` to opt-in to motion on devices that allow it; the
+   global reduced-motion rule at the bottom of the file flat-lines
+   animation/transition duration for users who opt out.
+   ───────────────────────────────────────────────────────────── */
+@layer utilities {
+  /* Durations — naming reflects the intent (instant / fast / base / calm /
+     slow) rather than the raw ms. New code should prefer these tokens over
+     arbitrary Tailwind `duration-[NNN]` values so the platform's rhythm
+     stays consistent. */
+  .d-instant { transition-duration: 80ms; }
+  .d-fast    { transition-duration: 150ms; }
+  .d-base    { transition-duration: 200ms; }
+  .d-settle  { transition-duration: 300ms; }
+  .d-calm    { transition-duration: 500ms; }
+  .d-slow    { transition-duration: 700ms; }
+
+  /* Easings */
+  .e-out     { transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  .e-inout   { transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+  .e-linear  { transition-timing-function: linear; }
+
+  /* Composite presets — combine a tier + easing so component code reads as
+     a single class instead of two utilities. */
+  .motion-pop    { transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1); }
+  .motion-rise   { transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1),
+                              opacity    300ms cubic-bezier(0.16, 1, 0.3, 1); }
+  .motion-fade   { transition: opacity    200ms ease-out; }
+  .motion-slide  { transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1),
+                              opacity    300ms ease-out; }
+
+  /* Focus-visible accent — a uniform 2px frost ring around every
+     interactive element. Tailwind v4's `:focus-visible` selector picks
+     this up automatically when `focus-visible:` utilities are used, but a
+     global baseline ring guarantees the platform never feels keyboard-
+     hostile even for components that forgot to add it. */
+  :where(button, a, [role="button"], input, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-frost);
+    outline-offset: 2px;
+    /* No `border-radius` reset here — each element keeps its own radius so a
+       rounded-full social icon gets a circular focus ring instead of a square
+       one. Setting radius globally collapsed focus rings on every circular
+       CTA (nav socials, AZ letters, play pills). */
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Skeleton shimmer — a frost sheen sweeping over a faintly breathing
+   surface. The base pulses opacity while a soft highlight glides across,
+   so placeholders read as "alive / loading" rather than static blocks.
+   GPU-only (transform/opacity); honours reduced-motion below.
+   ───────────────────────────────────────────────────────────── */
+@keyframes shimmer {
+  100% { transform: translateX(100%); }
+}
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 0.9; }
+}
+/* Frost-dot pulse used by the CommandPalette loading indicator. Three dots
+   fade up and down in sequence; transform/opacity only, GPU-composited. */
+@keyframes shimmer-dot {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.35; }
+  40%           { transform: scale(1);   opacity: 1; }
+}
+.shimmer {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  /* `1 forwards` instead of `infinite` — once the image has decoded and
+     `.shimmer-stack` (the wrapper) cross-faded to opacity 0, this element
+     is invisible but the animation kept ticking against the compositor.
+     One cycle + freeze stops the keyframe re-rasterisation entirely. The
+     cross-fade duration is 0.55s, well within the first 1.8s shimmer
+     sweep, so the placeholder is still visibly alive while it shows. */
+  animation: skeleton-pulse 1.8s ease-in-out 1 forwards;
+}
+.shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklch, var(--color-frost) 12%, transparent) 45%,
+    oklch(1 0 0 / 0.08) 50%,
+    color-mix(in oklch, var(--color-frost) 12%, transparent) 55%,
+    transparent
+  );
+  animation: shimmer 1.8s cubic-bezier(0.4, 0, 0.2, 1) 1 forwards;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Render reveals — content arrives, never "pops". Each keyframe rises a
+   few px and settles with a touch of scale, on a GPU-composited transform.
+   `.reveal` plays once on mount (SSR-safe: paints from frame 0 immediately,
+   no JS/observer gating, so nothing is ever stuck invisible). Stagger via
+   `--reveal-delay` (set inline per index) for the cinematic cascade.
+   ───────────────────────────────────────────────────────────── */
+@keyframes reveal-rise {
+  from { opacity: 0; transform: translate3d(0, 14px, 0) scale(0.985); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes reveal-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.reveal {
+  animation: reveal-rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--reveal-delay, 0ms);
+  /* No `will-change` here: with 60+ cards on the page, a permanent GPU
+     layer per element doubles paint memory and slows the first scroll.
+     The keyframe compositor promotes on its own during the 0.6s run. */
+}
+.reveal-fade {
+  animation: reveal-fade 0.5s ease-out both;
+  animation-delay: var(--reveal-delay, 0ms);
+}
+/* Cross-fade a skeleton → its real content with no layout jump: both occupy
+   the same grid cell; the leaving layer fades out, the arriving one fades in. */
+@keyframes media-in {
+  from { opacity: 0; transform: scale(1.04); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.media-in {
+  animation: media-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+  /* No permanent will-change: a one-shot mount keyframe self-promotes to a
+     compositor layer for its 0.7s run, then the browser drops it. A standing
+     will-change here would pin a GPU layer forever, per element. */
+}
+
+/* Image reveal — runs once on mount. Starts at a hair of scale + 0 opacity,
+   settles to crisp full-opacity. Pure CSS, no React state, so the parent
+   (SmartImage) stays a Server Component. The shimmer placeholder sits in
+   the same absolute box and cross-fades out as the keyframe lands via its
+   own .shimmer fade.
+
+   Perf note: earlier revisions animated `filter: blur(8px → 0)` for a
+   "blur-up" feel, but filter transitions force the browser into a slow
+   compositing path (especially with `object-cover` posters which already
+   require a rasterization pass). The opacity+scale cross-fade reads
+   identically to the eye once the shimmer placeholder is fading out from
+   underneath — the shimmer itself is the visual carrier of "appearing". */
+@keyframes image-stack-in {
+  from { opacity: 0; transform: scale(1.03); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.image-stack {
+  animation: image-stack-in 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+  /* No permanent will-change. A one-shot keyframe already promotes its element
+     to a compositor layer for the 0.55s run and the browser drops it on
+     completion; a standing `will-change` (contrary to the old comment) is NOT
+     dropped — it would pin a GPU layer per image forever, and on a grid of
+     60+ posters that is the #1 source of paint-memory bloat. */
+}
+@media (prefers-reduced-motion: reduce) {
+  .image-stack { animation: none; }
+}
+/* Shimmer placeholder that sits behind `.image-stack` and fades out as the
+   image lands. The animation runs once, ending at opacity 0, so the
+   placeholder never paints over the loaded image. */
+@keyframes shimmer-stack-out {
+  0%   { opacity: 1; }
+  60%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+.shimmer-stack {
+  animation: shimmer-stack-out 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+  /* No `will-change`: this is a one-shot opacity animation. The browser
+     promotes the layer briefly during the run and drops it when done,
+     which is what we want — leaving it would double paint-memory pressure
+     for every image on the page. */
+}
+@media (prefers-reduced-motion: reduce) {
+  .shimmer-stack { animation: none; opacity: 0; }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Laser frame — a frost comet that revolves around a panel's edge.
+   A conic gradient (transparent tail → bright head) is masked to a
+   thin ring on the border box, then spun. Drop-shadow gives the glow.
+   Apply `.laser-frame` to any `position: relative`, rounded element;
+   the ring inherits the element's border-radius automatically.
+
+   Motion design: the comet sweeps ONCE, then rests for ~6 seconds before
+   the next pass. The static aura in `::before` keeps the edge glowing
+   during the rest, so the panel never looks dead. On hover, the cadence
+   shortens to a continuous 4s sweep — interaction rewards engagement
+   without leaving the rest state visually idle. Total animation cost is
+   bounded to ~1s of GPU compositing per 7s of wall time, vs. continuous
+   spinning (3.2s × infinite).
+   ───────────────────────────────────────────────────────────── */
+@property --laser-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes laser-sweep {
+  /* The original frost comet: a continuous, constant-speed lap of the conic
+     sweep (0–360°). Linear timing + a single keyframe target keeps it gliding
+     at one steady pace with no hover speed-up and no restart jump. */
+  to { --laser-angle: 360deg; }
+}
+
+.laser-frame {
+  position: relative;
+  isolation: isolate;
+  /* Hide the `.glass` 1px border on laser panels so the laser ring is the only
+     edge line — otherwise the glass border + the ring (inset -1px) read as two
+     parallel hairlines. */
+  border-color: transparent;
+}
+/* Soft static aura so the edge always glows a little, even between sweeps. */
+.laser-frame::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    140deg,
+    color-mix(in oklch, var(--color-frost-deep) 55%, transparent),
+    transparent 35%,
+    transparent 65%,
+    color-mix(in oklch, var(--color-frost) 55%, transparent)
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  filter: drop-shadow(0 0 6px color-mix(in oklch, var(--color-frost) 35%, transparent));
+  pointer-events: none;
+}
+/* A single travelling comet on a thin bright ring. The ring is 1.5px thick
+   with a hard bright head and a long fading tail for an unmistakable
+   laser-sweep identity. A single drop-shadow gives the glow (one filter on a
+   spinning conic is meaningfully cheaper than two stacked ones).
+
+   The comet is GATED behind `.laser-live`: only one element per viewport gets
+   the spinning comet, while every `.laser-frame` keeps the static frost aura
+   (`::before`) so the frost-edge identity is unchanged at rest. Stacking >1
+   spinning conic+filter in a viewport was a top paint cost on scroll. */
+.laser-frame.laser-live::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(
+    from var(--laser-angle) at 50% 50%,
+    transparent 0deg,
+    transparent 60deg,
+    color-mix(in oklch, var(--color-frost-deep) 60%, transparent) 120deg,
+    var(--color-frost) 145deg,
+    #ffffff 152deg,
+    transparent 162deg,
+    transparent 360deg
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  filter: drop-shadow(0 0 8px color-mix(in oklch, var(--color-frost) 55%, transparent));
+  animation: laser-sweep 7s linear infinite;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Cinematic details — premium anime info card.
+   GPU-only (transform/opacity). Honors reduced-motion above.
+   ───────────────────────────────────────────────────────────── */
+
+/* Poster slow-float idle motion (transform-only) */
+@keyframes poster-float {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50%      { transform: translate3d(0, -4px, 0) scale(1.005); }
+}
+.poster-float { animation: poster-float 6s ease-in-out infinite; }
+
+/* Banner slow zoom-in (one-shot, on mount) */
+@keyframes banner-reveal {
+  from { transform: scale3d(1.08, 1.08, 1); opacity: 0; }
+  to   { transform: scale3d(1, 1, 1);          opacity: 1; }
+}
+.banner-reveal { animation: banner-reveal 1.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+/* Title rise (slightly more pronounced than .reveal) */
+@keyframes title-rise {
+  from { opacity: 0; transform: translate3d(0, 18px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+.title-rise { animation: title-rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both; animation-delay: var(--reveal-delay, 0ms); }
+
+/* Trending "train" marquee — runs entirely off the main thread as a CSS
+   keyframe animation. The duration is set per-element via the
+   `--trend-duration` custom property (computed from track width + drift
+   speed), so a wider / longer rail glides at the same px/s as a short one.
+   Pauses on hover/focus of the wrapping `.trend-marquee-wrap` so a click can
+   land; on touch the React handler stops the animation outright (sets
+   `animation: none`) and drives the transform directly while the finger is
+   down. Pure transform — GPU-composited, no main-thread cost. */
+@keyframes trend-marquee {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-50%, 0, 0); }
+}
+.trend-marquee {
+  animation: trend-marquee var(--trend-duration, 40s) linear infinite;
+  /* No `will-change`: the running keyframe already promotes the element to a
+     compositor layer for the duration of the animation, and the browser drops
+     it when paused / off-screen. A standing will-change pins a GPU layer
+     forever, which on long marquees doubled paint memory. */
+}
+.trend-marquee-wrap:hover .trend-marquee,
+.trend-marquee-wrap:focus-within .trend-marquee {
+  animation-play-state: paused;
+}
+
+/* Hover-lift preset for cards. transform + border-color only — never
+   box-shadow (a shadow transition repaints the whole card body per frame).
+   No `will-change`: a permanent GPU layer per stat-card / button on dense
+   pages adds up to dozens of pinned layers. The transform-on-hover is
+   small enough that the browser promotes and drops the layer on its own. */
+.hover-lift {
+  transition: transform 350ms cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 350ms ease;
+}
+.hover-lift:hover {
+  transform: translate3d(0, -2px, 0);
+}
+
+/* Genre pill interactive. transform + cheap color props only; any hover glow
+   is a static box-shadow that snaps (never transitioned). */
+.genre-pill {
+  transition: transform 250ms cubic-bezier(0.16, 1, 0.3, 1),
+              background-color 250ms ease,
+              border-color 250ms ease;
+}
+.genre-pill:hover {
+  transform: translate3d(0, -1px, 0) scale(1.04);
+}
+
+/* Stat-card micro-shine sweep (background-position, GPU friendly) */
+@keyframes shine-sweep {
+  0%   { background-position: -200% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+/* Read-more caret pulse */
+@keyframes caret-blink {
+  0%, 100% { opacity: 0.3; }
+  50%      { opacity: 1; }
+}
+.caret-blink { animation: caret-blink 1.4s ease-in-out infinite; }
+
+/* "Watch" pill spring — replaces the framer-motion motion.span in
+   LatestEpisodes. Same hover/active feel, pure CSS (transform/opacity only,
+   GPU-composited, respects reduced-motion via the global override). */
+.watch-pill-spring {
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  /* No `will-change`: the hover/active transform is small and short; the
+     browser promotes a transient layer during the transition and drops it
+     after. Pinning a layer per pill on a page with many coverflow cards
+     was measurable paint-memory bloat. */
+}
+.watch-pill-spring:hover { transform: scale(1.06); }
+.watch-pill-spring:active { transform: scale(0.96); }
+
+/* Frost underline accent (used in title eyebrow) */
+.frost-eyebrow {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 10px;
+  color: var(--color-frost);
+}
+.frost-eyebrow::before {
+  content: "";
+  width: 18px;
+  height: 1px;
+  background: linear-gradient(90deg, var(--color-frost), transparent);
+}
